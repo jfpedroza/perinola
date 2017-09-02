@@ -27,6 +27,20 @@ socket.on("players", function (plys: Player[]) {
     renderPlayers();
 });
 
+socket.on("update-player", function (ply: Player) {
+    players.forEach(p => {
+        if (p.id == ply.id) {
+            p.name = ply.name;
+            p.coins = ply.coins;
+            return false;
+        }
+    });
+
+    if (player.id != ply.id || stage > 2) {
+        updatePlayer(ply);
+    }
+});
+
 socket.on("do-spin", function(turns: number) {
     if (stage == 3) {
         console.log("Received do-spin, turns = " + turns);
@@ -39,6 +53,7 @@ socket.on("do-spin", function(turns: number) {
 
 $(function() {
     btnEnterClick();
+    btnSetClick();
     btnStartClick();
     btnSpinClick();
     btnPlayAgainClick();
@@ -49,9 +64,17 @@ $(function() {
 
 function btnEnterClick() {
     $("#btn-enter").click(function(e) {
-        player = new Player(new Date().getUTCMilliseconds(), "New Player", 2);
+        player = new Player(new Date().getTime(), "New Player", 2);
         socket.emit("new-player", player);
         setStage(2);
+    });
+}
+
+function btnSetClick() {
+    $("#player-table").on('click', '#btn-set', () => {
+        player.name = <string>$("#player-name").val();
+        player.coins = <number>$("#player-coins").val();
+        socket.emit("update-player", player);
     });
 }
 
@@ -190,14 +213,21 @@ function renderPlayers() {
         players.forEach(p => {
 
             if (player.id == p.id) {
-                table.append(`<tr>
-                                <td><input value="${p.name}" class="input" id="player-name"></td>
+                table.append(`<tr id="player-stg2-${p.id}">
+                                <td><input value="${p.name}" class="input" id="player-name" autofocus></td>
                                 <td><input type="number" value="${p.coins}" class="input" id="player-coins" min="2" width="4"></td>
+                                <td><button id="btn-set">Set</button></td>
                               </tr>`);
             } else {
-                table.append(`<tr><td>${p.name}</td><td>${p.coins}</td></tr>`);
+                table.append(`<tr id="player-stg2-${p.id}"><td>${p.name}</td><td>${p.coins}</td></tr>`);
             }
         });
+    }
+}
+
+function updatePlayer(p: Player) {
+    if (stage == 2) {
+        $(`#player-stg2-${p.id}`).html(`<td>${p.name}</td><td>${p.coins}</td>`);
     }
 }
 

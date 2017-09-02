@@ -24,6 +24,17 @@ io.on("connection", function(socket) {
         io.sockets.emit("players", players);
     });
 
+    socket.on("update-player", function (player: Player) {
+        players.forEach(p => {
+            if (p.id == player.id) {
+                p.name = player.name;
+                p.coins = player.coins;
+                return false;
+            }
+        });
+        io.sockets.emit("update-player", player);
+    });
+
     socket.on("spin", function(currentPlayer) {
         console.log("Spin message, current player = " + currentPlayer);
         const laps = Math.floor(minLaps + (maxLaps - minLaps) * Math.random());
