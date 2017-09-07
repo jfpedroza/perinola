@@ -119,7 +119,7 @@ function btnSpinClick() {
 
 function btnPlayAgainClick() {
     $("#btn-play-again").click(function(e) {
-        setStage(2);
+        restart();
     });
 }
 
