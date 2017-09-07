@@ -48,7 +48,6 @@
     ],
     "no-internal-module": true,
     "no-trailing-whitespace": true,
-    "prefer-const": true,
     "jsdoc-format": true
   }
 }

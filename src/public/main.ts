@@ -6,17 +6,12 @@ import Socket = SocketIOClient.Socket;
 
 let player: Player = null;
 let players: Player[] = [];
+let currentPlayer: Player = null;
 
-let playerNumber = 2;
 let stage = 1;
-let coinNumber = 4;
 let currentImage = 1;
 const maxImages = 6;
-const minLaps = 7;
-const maxLaps = 12;
 let coinsInTable = 0;
-let currentPlayer = 0;
-let players2: any[] = [];
 let spinButton: any;
 let socket: Socket;
 
@@ -35,7 +30,7 @@ socket.on("update-player", function (ply: Player) {
     }
 
     if (player.id != ply.id || stage > 2) {
-        updatePlayer(ply);
+        updatePlayer(ply, true);
     }
 });
 
@@ -44,7 +39,6 @@ socket.on("not-enough-players", function (minPlayers: number) {
 });
 
 socket.on("start-game", function () {
-    playerNumber = players.length;
     setStage(3);
 });
 
@@ -52,14 +46,33 @@ socket.on("restart", function () {
     location.reload(true);
 });
 
+socket.on("update-coins-in-table", function (coins: number) {
+    coinsInTable = coins;
+    animateNumber($("#table-coins"), coinsInTable, 100);
+});
+
+socket.on("set-current-player", function (current: Player) {
+    setCurrentPlayer(current);
+});
+
 socket.on("do-spin", function(turns: number) {
     if (stage == 3) {
-        console.log("Received do-spin, turns = " + turns);
         startAnimation(turns, 0, function () {
             spinButton.removeClass("disabled");
             spinningComplete();
         });
     }
+});
+
+socket.on("winner", function (winner: Player) {
+    if (player.id == winner.id) {
+        $("#img-win-lose").attr("src", "img/win.png");
+        $("#winner-player").text(`Ganaste con ${winner.coins} monedas`);
+    } else {
+        $("#img-win-lose").attr("src", "img/lose.png");
+        $("#winner-player").text(`${winner.name} ganó con ${winner.coins} monedas`);
+    }
+    setStage(4);
 });
 
 $(function() {
@@ -68,7 +81,6 @@ $(function() {
     btnStartClick();
     btnSpinClick();
     btnPlayAgainClick();
-    btnNewGameClick();
     btnHomeClick();
     setStage(1);
 });
@@ -92,8 +104,6 @@ function btnSetClick() {
 function btnStartClick() {
     $("#btn-start").click(function(e) {
         socket.emit("start");
-        /*playerNumber = parseInt(<string>$("#player-number").val());
-        setStage(3);*/
     });
 }
 
@@ -101,7 +111,7 @@ function btnSpinClick() {
     spinButton = $("#btn-spin");
     spinButton.click(function(e: any) {
         if (!spinButton.hasClass("disabled")) {
-            console.log("Spin Button Click", players2, currentImage, currentPlayer, coinsInTable);
+            spinButton.addClass("disabled");
             socket.emit('spin', currentPlayer);
         }
     });
@@ -109,12 +119,6 @@ function btnSpinClick() {
 
 function btnPlayAgainClick() {
     $("#btn-play-again").click(function(e) {
-        setStage(2);
-    });
-}
-
-function btnNewGameClick() {
-    $("#btn-new-game").click(function(e) {
         setStage(2);
     });
 }
@@ -134,23 +138,13 @@ function setStage(s: number) {
 function onStageChange() {
     if (stage === 3) {
         spinButton.addClass("disabled");
-        createPlayerArray();
-        //renderPlayers();
+        renderPlayers();
 
         setImage(1);
 
         $("#table-coins").text("0");
-        coinsInTable = playerNumber;
-        animateNumber($("#table-coins"), playerNumber, 100);
-        $(".player h3").each(function(i) {
-            animateNumber($(this), players2[i] - 1, 300);
-            players2[i]--;
-        });
 
-        setTimeout(function() {
-            setCurrentPlayer(1);
-            spinButton.removeClass("disabled");
-        }, 1400);
+        socket.emit("ready");
     }
 }
 
@@ -160,10 +154,18 @@ function setImage(imageNumber: number) {
     $("#image-" + currentImage).show();
 }
 
-function setCurrentPlayer(player: number) {
-    $("#player-" + currentPlayer).removeClass("active");
-    currentPlayer = player;
-    $("#player-" + currentPlayer).addClass("active");
+function setCurrentPlayer(current: Player) {
+    if (currentPlayer != null) {
+        $(`#player-${currentPlayer.id}`).removeClass("active");
+    }
+    currentPlayer = current;
+    $(`#player-${currentPlayer.id}`).addClass("active");
+
+    if (currentPlayer.id == player.id) {
+        spinButton.removeClass("disabled");
+    } else {
+        spinButton.addClass("disabled");
+    }
 }
 
 function startAnimation(turns: number, i: number, complete: Function) {
@@ -173,15 +175,12 @@ function startAnimation(turns: number, i: number, complete: Function) {
         return;
     }
 
-    if (i > 0) {
-        currentImage++;
-        if (currentImage > maxImages) {
-            currentImage = 1;
-        }
-
-        setImage(currentImage);
+    currentImage++;
+    if (currentImage > maxImages) {
+        currentImage = 1;
     }
 
+    setImage(currentImage);
 
     let time;
     if (turns - i > 3 * maxImages) {
@@ -194,22 +193,6 @@ function startAnimation(turns: number, i: number, complete: Function) {
     setTimeout(function() {
         startAnimation(turns, i + 1, complete);
     }, time);
-}
-
-function createPlayerArray() {
-    $(".player").remove();
-
-    players2 = [];
-    for (let i = 0; i < playerNumber; i++) {
-        players2.push(coinNumber);
-    }
-
-    for (let i = 0; i < playerNumber; i++) {
-        $('<div class="player" id="player-' + (i + 1) + '">'
-            + '<h5>P' + (i + 1) + '</h5>'
-            + '<h3>' + players2[i] + '</h3>'
-            + '</div>').appendTo(".players");
-    }
 }
 
 function renderPlayers() {
@@ -240,108 +223,20 @@ function renderPlayers() {
     }
 }
 
-function updatePlayer(p: Player) {
+function updatePlayer(p: Player, animate: boolean) {
     if (stage == 2) {
         $(`#player-stg2-${p.id}`).html(`<td>${p.name}</td><td>${p.coins}</td>`);
     } else if (stage == 3) {
-        $(`#player-${p.id}`).html(`<h5>${p.name}</h5><h3>${p.coins}</h3>`);
+        if (animate) {
+            animateNumber($(`#player-${p.id} h3`), p.coins, 300);
+        } else {
+            $(`#player-${p.id}`).html(`<h5>${p.name}</h5><h3>${p.coins}</h3>`);
+        }
     }
 }
 
 function spinningComplete() {
-    let count;
-    console.log("Spining Complete", players2, currentImage, currentPlayer, coinsInTable);
-    switch (currentImage) {
-        case 1:
-            count = 0;
-            for (let i = 0; i < playerNumber; i++) {
-                if (players2[i] > 0) {
-                    players2[i]--;
-                    animateNumber($("#player-" + (i + 1) + " h3"), players2[i], 300);
-                    count++;
-                }
-            }
-            coinsInTable += count;
-            break;
-        case 2:
-            count = 2;
-            if (coinsInTable < 2) {
-                count = coinsInTable;
-                coinsInTable = 0;
-            } else {
-                coinsInTable -= 2;
-            }
-
-            players2[currentPlayer - 1] += count;
-            animateNumber($("#player-" + currentPlayer + " h3"), players2[currentPlayer - 1], 300);
-            break;
-        case 3:
-            coinsInTable++;
-
-            players2[currentPlayer - 1]--;
-            animateNumber($("#player-" + currentPlayer + " h3"), players2[currentPlayer - 1], 300);
-            break;
-        case 4:
-
-            players2[currentPlayer - 1] += coinsInTable;
-            coinsInTable = 0;
-            animateNumber($("#player-" + currentPlayer + " h3"), players2[currentPlayer - 1], 300);
-            break;
-        case 5:
-            count = 2;
-            if (players2[currentPlayer - 1] < 2) {
-                count = players2[currentPlayer - 1];
-                players2[currentPlayer - 1] = 0;
-            } else {
-                players2[currentPlayer - 1] -= 2;
-            }
-
-            coinsInTable += count;
-            animateNumber($("#player-" + currentPlayer + " h3"), players2[currentPlayer - 1], 300);
-            break;
-        case 6:
-            count = 1;
-            if (coinsInTable < 1) {
-                count = coinsInTable;
-                coinsInTable = 0;
-            } else {
-                coinsInTable -= 1;
-            }
-
-            players2[currentPlayer - 1] += count;
-            animateNumber($("#player-" + currentPlayer + " h3"), players2[currentPlayer - 1], 300);
-            break;
-    }
-
-    console.log("Spining Complete, End", players2, currentImage, currentPlayer, coinsInTable);
-
-    animateNumber($("#table-coins"), coinsInTable, 100);
-
-    count = 0;
-    let winner = 0;
-    for (let i = 0; i < playerNumber; i++) {
-        if (players2[i] > 0) {
-            winner = i + 1;
-            count++;
-            if (count > 1) {
-                break;
-            }
-        }
-    }
-
-    if (count <= 1) {
-        $("#winner-player").text("Jugador " + winner);
-        setStage(4);
-    } else {
-        let player = currentPlayer;
-        do {
-            player = player + 1;
-            if (player > playerNumber) {
-                player = 1;
-            }
-        } while (players2[player - 1] == 0);
-        setCurrentPlayer(player);
-    }
+    socket.emit("spinning-complete");
 }
 
 function restart() {
@@ -361,7 +256,6 @@ function animateNumber(el: any, newValue: number, time: number) {
     const value = parseInt(el.text());
     let duration = (newValue - value) * time;
     if (duration < 0) duration = -duration;
-    console.log(value, newValue, duration);
 
     el.prop('Counter', value).animate({
         Counter: newValue
