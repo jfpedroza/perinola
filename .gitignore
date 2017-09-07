@@ -66,3 +66,4 @@ fabric.properties
 
 node_modules/
 dist/
+/nbproject/private/

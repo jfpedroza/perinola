@@ -111,6 +111,10 @@ a:visited {
     color: blue;
 }
 
+#restart-btn {
+    float: right;
+}
+
 .input {
     display: inline-block;
     -webkit-box-sizing: content-box;

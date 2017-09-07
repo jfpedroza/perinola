@@ -28,17 +28,28 @@ socket.on("players", function (plys: Player[]) {
 });
 
 socket.on("update-player", function (ply: Player) {
-    players.forEach(p => {
-        if (p.id == ply.id) {
-            p.name = ply.name;
-            p.coins = ply.coins;
-            return false;
-        }
-    });
+    let p = getPlayer(ply.id);
+    if (p != null) {
+        p.name = ply.name;
+        p.coins = ply.coins;
+    }
 
     if (player.id != ply.id || stage > 2) {
         updatePlayer(ply);
     }
+});
+
+socket.on("not-enough-players", function (minPlayers: number) {
+    alert(`No hay suficientes jugadores. Mínimo ${minPlayers} jugadores`);
+});
+
+socket.on("start-game", function () {
+    playerNumber = players.length;
+    setStage(3);
+});
+
+socket.on("restart", function () {
+    location.reload(true);
 });
 
 socket.on("do-spin", function(turns: number) {
@@ -80,8 +91,9 @@ function btnSetClick() {
 
 function btnStartClick() {
     $("#btn-start").click(function(e) {
-        playerNumber = parseInt(<string>$("#player-number").val());
-        setStage(3);
+        socket.emit("start");
+        /*playerNumber = parseInt(<string>$("#player-number").val());
+        setStage(3);*/
     });
 }
 
@@ -91,13 +103,6 @@ function btnSpinClick() {
         if (!spinButton.hasClass("disabled")) {
             console.log("Spin Button Click", players2, currentImage, currentPlayer, coinsInTable);
             socket.emit('spin', currentPlayer);
-            /*var laps = Math.trunc(minLaps + (maxLaps - minLaps) * Math.random());
-            var lapPart = Math.trunc(maxImages * Math.random());
-            spinButton.addClass("disabled");
-            startAnimation(laps * maxImages + lapPart, 0, function() {
-                spinButton.removeClass("disabled");
-                spinningComplete();
-            });*/
         }
     });
 }
@@ -130,6 +135,7 @@ function onStageChange() {
     if (stage === 3) {
         spinButton.addClass("disabled");
         createPlayerArray();
+        //renderPlayers();
 
         setImage(1);
 
@@ -202,7 +208,7 @@ function createPlayerArray() {
         $('<div class="player" id="player-' + (i + 1) + '">'
             + '<h5>P' + (i + 1) + '</h5>'
             + '<h3>' + players2[i] + '</h3>'
-            + '</div>').appendTo(".players2");
+            + '</div>').appendTo(".players");
     }
 }
 
@@ -222,12 +228,23 @@ function renderPlayers() {
                 table.append(`<tr id="player-stg2-${p.id}"><td>${p.name}</td><td>${p.coins}</td></tr>`);
             }
         });
+    } else if (stage == 3) {
+        $(".player").remove();
+        let plys = $(".players");
+        players.forEach(p => {
+            plys.append(`<div class="player" id="player-${p.id}">
+                            <h5>${p.name}</h5>
+                            <h3>${p.coins}</h3>
+                        </div>`);
+        });
     }
 }
 
 function updatePlayer(p: Player) {
     if (stage == 2) {
         $(`#player-stg2-${p.id}`).html(`<td>${p.name}</td><td>${p.coins}</td>`);
+    } else if (stage == 3) {
+        $(`#player-${p.id}`).html(`<h5>${p.name}</h5><h3>${p.coins}</h3>`);
     }
 }
 
@@ -324,6 +341,19 @@ function spinningComplete() {
             }
         } while (players2[player - 1] == 0);
         setCurrentPlayer(player);
+    }
+}
+
+function restart() {
+    socket.emit("restart");
+}
+
+function getPlayer(id: number): Player {
+    const result = players.filter(p => p.id == id);
+    if (result.length > 0) {
+        return result[0];
+    } else {
+        return null;
     }
 }
 
